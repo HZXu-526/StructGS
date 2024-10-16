@@ -31,6 +31,10 @@ try:
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
+from TV_loss import TVLoss
+from model_components import S3IM
+import torch.nn as nn
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 @torch.no_grad()
 def create_offset_gt(image, offset):
@@ -46,6 +50,41 @@ def create_offset_gt(image, offset):
     
     image = torch.nn.functional.grid_sample(image[None], id_coords[None], align_corners=True, padding_mode="border")[0]
     return image
+
+    # --------------------------------------------------------------------------------------------------------------------------------
+
+
+def split_image(image, patch_height, patch_width):
+    # print("-----------------------------------")
+    # print(patch_height, patch_width,image.shape)
+    # 假设image形状为 (batch_size, channels, height, width)
+    batch_size, channels, height, width = image.shape
+    assert height % patch_height == 0, "height 必须能被 patch_height 整除"
+    assert width % patch_width == 0, "width 必须能被 patch_width 整除"
+
+    # 按照patch_height和patch_width分块
+    patches = image.unfold(2, patch_height, patch_height).unfold(3, patch_width, patch_width)
+    patches = patches.contiguous().view(batch_size, channels, -1, patch_height, patch_width)
+    return patches
+
+class TVLoss(nn.Module):
+    def __init__(self, weight=1):
+        super(TVLoss, self).__init__()
+        self.weight = weight
+
+    def forward(self, x):
+        # Calculate TV loss
+        batch_size, c, h, w = x.size()
+
+        # Compute differences between neighboring pixels in the x and y directions
+        x_diff = torch.abs(x[:, :, 1:, :] - x[:, :, :-1, :])
+        y_diff = torch.abs(x[:, :, :, 1:] - x[:, :, :, :-1])
+
+        # Sum over all pixels and normalize
+        loss = self.weight * (torch.sum(x_diff) + torch.sum(y_diff)) / (c * h * w)
+
+        return loss
+    # --------------------------------------------------------------------------------------------------------------------------------
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
@@ -132,7 +171,59 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             gt_image = create_offset_gt(gt_image, subpixel_offset)
 
         Ll1 = l1_loss(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        #loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        # ------------------------------------------------------------------------------------
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if iteration > 25000:  # 最佳25000
+
+            patch_height, patch_width = int(image.shape[1] / 1), int(image.shape[2] / 2)
+            # print("----------------------------------------")
+            # print(image.shape)
+            patches = split_image(image.unsqueeze(0), patch_height, patch_width)
+            gt_patches = split_image(gt_image.unsqueeze(0), patch_height, patch_width)
+
+            s3im_func = S3IM(patch_height=patch_height, patch_width=patch_width, kernel_size=4, stride=1,
+                             repeat_time=10).to(device)
+            s3im_loss = 0
+            num_patches = patches.size(2)
+            for i in range(num_patches):
+                # 取出第 i 个补丁块
+                src_patch = patches[:, :, i, :, :]
+                gt_patch = gt_patches[:, :, i, :, :]
+
+                # 计算这个补丁块的 S3IM loss
+                s3im_loss += s3im_func(src_patch.permute(0, 2, 3, 1).view(-1, 3),
+                                       gt_patch.permute(0, 2, 3, 1).view(-1, 3))
+
+            # 平均每个补丁块的损失
+            s3im_loss /= num_patches
+
+            # Compute Total Variation Loss
+            tv_loss = TVLoss(weight=0.02)
+            tvl = tv_loss(image.unsqueeze(0))
+            sys.stdout.write(
+                f"\rL1 Loss (weighted): {(1.0 - opt.lambda_dssim) * Ll1:.4f} | "
+                # f"SSIM Loss (weighted): {opt.lambda_dssim * ssim_loss:.4f} | "
+                f"S3IM Loss (weighted): {opt.lambda_dssim * s3im_loss:.4f} | "
+                f"TV_loss (weighted): {tvl:.4f}"
+            )
+            sys.stdout.flush()
+
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - s3im_loss) + tvl
+        else:
+            ssim_loss = (1.0 - ssim(image, gt_image))
+
+            # Compute Total Variation Loss
+            tv_loss = TVLoss(weight=0.04)
+            tvl = tv_loss(image.unsqueeze(0))
+
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) + tvl
+
+
+
+
+
         loss.backward()
 
         iter_end.record()
