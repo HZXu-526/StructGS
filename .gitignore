@@ -12,3 +12,5 @@ multi-scale
 benchmark*
 debug*
 fused
+训练360 cmd.txt
+output_results
