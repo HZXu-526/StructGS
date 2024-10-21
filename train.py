@@ -210,7 +210,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             )
             sys.stdout.flush()
 
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - s3im_loss) + tvl
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * s3im_loss + tvl
         else:
             ssim_loss = (1.0 - ssim(image, gt_image))
 
@@ -218,7 +218,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             tv_loss = TVLoss(weight=0.04)
             tvl = tv_loss(image.unsqueeze(0))
 
-            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) + tvl
+            loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * ssim_loss + tvl
 
 
 
