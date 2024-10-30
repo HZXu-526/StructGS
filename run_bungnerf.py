@@ -2,11 +2,11 @@ import os
 import subprocess
 
 # scenes
-scenes = ["bicycle", "bonsai", "counter", "flowers", "garden", "kitchen", "room", "stump", "treehill"]
+scenes = ["amsterdam", "barcelona", "bilbao", "chicago", "hollywood", "pompidou", "quebec", "rome"]
 
 # The base paths for the dataset and output directory.
-data_base_path = r"E:\PhD\training_data\3DGS\360_v2"
-output_base_path = "outputs/360_v2"
+data_base_path = "training_data/3DGS/bungeenerf"
+output_base_path = "outputs/bungeenerf"
 
 # Iterate through each scene and execute the training, rendering, and evaluation commands in sequence.
 for scene in scenes:
@@ -26,7 +26,7 @@ for scene in scenes:
     metrics_cmd = f"python metrics.py -m {output_path}"
     subprocess.run(metrics_cmd, shell=True)
     
-
+    
     # Super-resolution
     sr_input_dir = os.path.join(output_path, "test/ours_30000/test_preds_-1")
     sr_output_dir = os.path.join(output_path, "test/ours_30000/super")
@@ -38,3 +38,4 @@ for scene in scenes:
     sr_renders_dir = sr_output_dir
     metrics_super_cmd = f"python metrics_super.py --gt_dir {sr_gt_dir} --renders_dir {sr_renders_dir}"
     subprocess.run(metrics_super_cmd, shell=True)
+

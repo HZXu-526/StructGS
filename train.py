@@ -57,12 +57,12 @@ def create_offset_gt(image, offset):
 def split_image(image, patch_height, patch_width):
     # print("-----------------------------------")
     # print(patch_height, patch_width,image.shape)
-    # 假设image形状为 (batch_size, channels, height, width)
+    # Assume the shape of image is (batch_size, channels, height, width)
     batch_size, channels, height, width = image.shape
-    assert height % patch_height == 0, "height 必须能被 patch_height 整除"
-    assert width % patch_width == 0, "width 必须能被 patch_width 整除"
+    assert height % patch_height == 0, "'height' must be divisible by 'patch_height'"
+    assert width % patch_width == 0, "'width' must be divisible by 'patch_width'"
 
-    # 按照patch_height和patch_width分块
+    # Divide into blocks according to patch_height and patch_width
     patches = image.unfold(2, patch_height, patch_height).unfold(3, patch_width, patch_width)
     patches = patches.contiguous().view(batch_size, channels, -1, patch_height, patch_width)
     return patches
@@ -172,10 +172,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         Ll1 = l1_loss(image, gt_image)
         #loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+
         # ------------------------------------------------------------------------------------
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        if iteration > 25000:  # 最佳25000
+        if iteration > 25000:  # Best 25000
 
             patch_height, patch_width = int(image.shape[1] / 1), int(image.shape[2] / 2)
             # print("----------------------------------------")
@@ -188,15 +189,15 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             s3im_loss = 0
             num_patches = patches.size(2)
             for i in range(num_patches):
-                # 取出第 i 个补丁块
+                # Extract the i-th patch block
                 src_patch = patches[:, :, i, :, :]
                 gt_patch = gt_patches[:, :, i, :, :]
 
-                # 计算这个补丁块的 S3IM loss
+                # Calculate the S3IM loss for this patch block
                 s3im_loss += s3im_func(src_patch.permute(0, 2, 3, 1).view(-1, 3),
                                        gt_patch.permute(0, 2, 3, 1).view(-1, 3))
 
-            # 平均每个补丁块的损失
+            # Average the loss for each patch block
             s3im_loss /= num_patches
 
             # Compute Total Variation Loss
@@ -220,8 +221,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * ssim_loss + tvl
 
-
-
+        # ------------------------------------------------------------------------------------
 
 
         loss.backward()
@@ -340,8 +340,8 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6009)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[100, 900, 2000, 5000, 7_000, 15000, 30_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[100, 900, 2000, 5000, 7_000, 15000, 30_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 30_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)

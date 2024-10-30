@@ -34,7 +34,7 @@ def read_images(gt_dir, renders_dir):
             render = Image.open(render_path)
             gt = Image.open(gt_path)
 
-            # 使用相同插值方法统一到某个尺寸
+            # Uniformly resize to a certain dimension using the same interpolation method
             common_size = (512, 512)
             render = render.resize(common_size, Image.BICUBIC)
             gt = gt.resize(common_size, Image.BICUBIC)
@@ -50,13 +50,13 @@ def calculate_metrics(renders, gts, image_names):
     lpipss = []
 
     for idx in tqdm(range(len(renders)), desc="Metric evaluation progress"):
-        # 调整 ssim 窗口大小或者使用其他参数
-        ssims.append(ssim(renders[idx], gts[idx], window_size=11))  # 示例调整窗口大小
+        # Adjust the SSIM window size or use other parameters
+        ssims.append(ssim(renders[idx], gts[idx], window_size=11)) # Example of adjusting window size
 
         psnrs.append(psnr(renders[idx], gts[idx]))
         
-        # 使用不同的网络类型计算 lpips
-        lpipss.append(lpips(renders[idx], gts[idx], net_type='alex'))  # 使用不同的网络类型
+        # Calculate LPIPS using different network types
+        lpipss.append(lpips(renders[idx], gts[idx], net_type='alex'))  # Use different network types
 
     avg_ssim = torch.tensor(ssims).mean().item()
     avg_psnr = torch.tensor(psnrs).mean().item()
@@ -75,16 +75,25 @@ def evaluate(gt_dir, renders_dir):
     
     avg_ssim, avg_psnr, avg_lpips, per_view_metrics = calculate_metrics(renders, gts, image_names)
 
-    # 打印整体结果
+    # print metric scores
     print(f"SSIM : {avg_ssim:.7f}")
     print(f"PSNR : {avg_psnr:.7f}")
     print(f"LPIPS: {avg_lpips:.7f}")
-
+    
+    output_dir = Path(gt_dir).parents[2]
+    
     results = {
         "SSIM": avg_ssim,
         "PSNR": avg_psnr,
         "LPIPS": avg_lpips
     }
+
+    # Save results as JSON
+    os.makedirs(output_dir, exist_ok=True)
+    with open(output_dir / "results_super.json", 'w') as f:
+        json.dump(results, f, indent=4)
+
+    print(f"Results saved to {output_dir / 'results_super.json'}")
 
 if __name__ == "__main__":
     device = torch.device("cuda:0")
@@ -96,4 +105,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     evaluate(args.gt_dir, args.renders_dir)
-    # python metrics_super.py --gt_dir outputs/mipnerf360/bicycle/baseline/2024-08-25_20:42:30/test/ours_30000/gt --renders_dir outputs/mipnerf360/bicycle/baseline/2024-08-25_20:42:30/test/ours_30000/super
+
+
+    # python metrics_super.py --gt_dir outputs/360_v2/bicycle/test/ours_30000/gt_-1 --renders_dir outputs/360_v2/bicycle/test/ours_30000/super

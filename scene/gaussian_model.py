@@ -198,10 +198,10 @@ class GaussianModel:
         self.spatial_lr_scale = spatial_lr_scale
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
         # original
-        # fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
-        # features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
-        # features[:, :3, 0 ] = fused_color
-        # features[:, 3:, 1:] = 0.0
+        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
+        features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
+        features[:, :3, 0 ] = fused_color
+        features[:, 3:, 1:] = 0.0
 
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
@@ -210,19 +210,19 @@ class GaussianModel:
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
         rots[:, 0] = 1
 
-        #opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
-        opacities = inverse_sigmoid(0.6 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
+        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
+        #opacities = inverse_sigmoid(0.6 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
 
         # Dynamically adjust spherical harmonics dimensions based on distance and transparency.
-        max_sh_degree = torch.clamp((dist2 * 5).int(), min=1, max=5)
-        sh_coeffs_count = (max_sh_degree + 1) ** 2
-        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
-        features = torch.zeros((fused_color.shape[0], 3, torch.max(sh_coeffs_count).item())).float().cuda()
-        features[:, :3, 0] = fused_color * opacities.view(-1, 1).expand(-1, 3)
-        for i in range(fused_color.shape[0]):
-            degree = max_sh_degree[i].item()
-            coeffs_count = (degree + 1) ** 2
-            features[i, :, 1:coeffs_count] = (fused_color[i, :] * opacities[i]).unsqueeze(1).expand(-1, coeffs_count - 1)
+        #max_sh_degree = torch.clamp((dist2 * 5).int(), min=1, max=5)
+        #sh_coeffs_count = (max_sh_degree + 1) ** 2
+        #fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
+        #features = torch.zeros((fused_color.shape[0], 3, torch.max(sh_coeffs_count).item())).float().cuda()
+        #features[:, :3, 0] = fused_color * opacities.view(-1, 1).expand(-1, 3)
+        #for i in range(fused_color.shape[0]):
+            #degree = max_sh_degree[i].item()
+            #coeffs_count = (degree + 1) ** 2
+            #features[i, :, 1:coeffs_count] = (fused_color[i, :] * opacities[i]).unsqueeze(1).expand(-1, coeffs_count - 1)
 
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
         self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
@@ -354,15 +354,22 @@ class GaussianModel:
         features_dc[:, 0, 0] = np.asarray(plydata.elements[0]["f_dc_0"])
         features_dc[:, 1, 0] = np.asarray(plydata.elements[0]["f_dc_1"])
         features_dc[:, 2, 0] = np.asarray(plydata.elements[0]["f_dc_2"])
+        #degree_value = (self.max_sh_degree + 1) ** 2
+        #degree_tensor = torch.tensor(degree_value)
 
         extra_f_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("f_rest_")]
         extra_f_names = sorted(extra_f_names, key = lambda x: int(x.split('_')[-1]))
         assert len(extra_f_names)==3*(self.max_sh_degree + 1) ** 2 - 3
         features_extra = np.zeros((xyz.shape[0], len(extra_f_names)))
+        #features_extra = np.zeros((xyz.shape[0], 3 * degree_tensor.item() - 3))
         for idx, attr_name in enumerate(extra_f_names):
             features_extra[:, idx] = np.asarray(plydata.elements[0][attr_name])
         # Reshape (P,F*SH_coeffs) to (P, F, SH_coeffs except DC)
         features_extra = features_extra.reshape((features_extra.shape[0], 3, (self.max_sh_degree + 1) ** 2 - 1))
+
+        #features_extra = features_extra.reshape(
+            #(features_extra.shape[0], 3, torch.max(degree_tensor).item() - 1)
+        #)
 
         scale_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("scale_")]
         scale_names = sorted(scale_names, key = lambda x: int(x.split('_')[-1]))
