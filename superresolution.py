@@ -53,5 +53,4 @@ if __name__ == '__main__':
 
 
     # python superresolution.py --input_dir outputs/360_v2/bicycle/test/ours_30000/test_preds_-1 --output_dir outputs/360_v2/bicycle/test/ours_30000/super --scale 2
-
-# python superresolution.py --input_dir outputs/villa/test/ours_30000/test_preds_-1 --output_dir outputs/villa/test/ours_30000/super --scale 2
+    
